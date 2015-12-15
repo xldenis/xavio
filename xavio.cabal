@@ -23,6 +23,13 @@ library
                      , wai
                      , warp
                      , either
+                     , text
+                     , time
+                     , opaleye
+                     , product-profunctors
+                     , transformers
+                     , postgresql-simple
+
   default-language:    Haskell2010
   extensions:          TypeOperators
                      , DataKinds

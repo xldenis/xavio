@@ -5,7 +5,7 @@ module API where
 
 import Servant
 import Control.Monad.Trans.Either
-
+import Database.PostgreSQL.Simple as PGS
 
 type Responders = '[JSON]
 

@@ -1,0 +1,1 @@
+type LoginAPI = "login" :> Get '[] ()

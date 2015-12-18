@@ -2,6 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module PostsAPI where
 
@@ -13,6 +14,7 @@ import Data.Time.Clock (UTCTime(..))
 
 import Control.Monad.Trans.Either
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad
 
 import Servant hiding (Post)
 
@@ -20,12 +22,19 @@ import Opaleye
 import Database.PostgreSQL.Simple as PGS
 import Data.Profunctor.Product
 import Data.Profunctor.Product.TH
+import Data.Aeson
 
 import API
 
 type PostId = Int
 
-data Post' pid t1 t2 ts1 ts2 = Post pid t1 t2 ts1 ts1 deriving (Eq, Show, Generic)
+data Post' pid t1 t2 ts1 ts2 = Post
+  { postId :: pid
+  , title :: t1
+  , body  :: t2
+  , createdAt :: ts1
+  , updatedAt :: ts2
+  } deriving (Eq, Show, Generic)
 
 type PostColumn = Post' (Column PGInt4) (Column PGText) (Column PGText) (Column PGTimestamptz) (Column PGTimestamptz)
 type Post =  Post' PostId Text Text UTCTime UTCTime
@@ -37,13 +46,32 @@ type PostsAPI = APIFor Post PostId
 postsTable :: Table PostColumn PostColumn
 postsTable = Table "posts"
                   (pPost $ Post
-                    (required "id")
-                    (required "title")
-                    (required "body")
-                    (required "created_at")
-                    (required "updated_at")
+                    { postId = (required "id")
+                    , title  = (required "title")
+                    , body   = (required "body")
+                    , createdAt = (required "created_at")
+                    , updatedAt = (required "updated_at")
+                    }
                   )
 
+instance FromJSON Post where
+  parseJSON (Object o)
+    = Post <$>
+      o .: "id" <*>
+      o .: "title" <*>
+      o .: "body"  <*>
+      o .: "created_at" <*>
+      o .: "updated_at"
+  parseJSON _ = mzero
+
+instance ToJSON Post where
+  toJSON (Post id title body c_at u_at)
+     = object [ "id" .= id
+             , "title" .= title
+             , "body" .= body
+             , "created_at" .= c_at
+             , "updated_at" .= u_at
+             ]
 postsApi :: Connection -> Server PostsAPI
 postsApi c  = serverFor (index c) (show c) (create c) (update c) (destroy c)
 

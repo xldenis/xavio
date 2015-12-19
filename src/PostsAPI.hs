@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Arrows #-}
 
 module PostsAPI where
 
@@ -10,11 +11,12 @@ import Prelude hiding (show, index)
 import GHC.Generics
 
 import Data.Text hiding (index)
-import Data.Time.Clock (UTCTime(..))
+import Data.Time.Clock (UTCTime(..), getCurrentTime)
 
 import Control.Monad.Trans.Either
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad
+import Control.Arrow (returnA)
 
 import Servant hiding (Post)
 
@@ -37,16 +39,17 @@ data Post' pid t1 t2 ts1 ts2 = Post
   } deriving (Eq, Show, Generic)
 
 type PostColumn = Post' (Column PGInt4) (Column PGText) (Column PGText) (Column PGTimestamptz) (Column PGTimestamptz)
+type WPostColumn = Post' (Maybe (Column PGInt4)) (Column PGText) (Column PGText) (Column PGTimestamptz) (Column PGTimestamptz)
 type Post =  Post' PostId Text Text UTCTime UTCTime
 
 $(makeAdaptorAndInstance "pPost" ''Post')
 
 type PostsAPI = APIFor Post PostId
 
-postsTable :: Table PostColumn PostColumn
+postsTable :: Table WPostColumn PostColumn
 postsTable = Table "posts"
                   (pPost $ Post
-                    { postId = (required "id")
+                    { postId = (optional "id")
                     , title  = (required "title")
                     , body   = (required "body")
                     , createdAt = (required "created_at")
@@ -79,10 +82,29 @@ index :: Connection -> Response [Post]
 index con = liftIO $ runQuery con (queryTable postsTable)
 
 show :: Connection -> PostId -> Response Post
-show = undefined
+show con id = do
+  post <- liftIO . (runQuery con) . selectPostById $ id
+  case post of
+    [] -> left err404
+    (p:_) -> return p
+
+selectPostById :: PostId -> Opaleye.Query PostColumn
+selectPostById id = proc () -> do
+  post@(Post pid _ _ _ _) <- (queryTable postsTable) -< ()
+  restrict -< pid .== pgInt4 id
+  returnA -< post
 
 create :: Connection -> Post -> Response ()
-create = undefined
+create con post@(Post pid t b c_at u_at) = liftIO $ do
+    c_at <- getCurrentTime
+    (runInsert con postsTable) $ Post
+      { postId = Nothing
+      , title  = pgText t
+      , body   = pgText b
+      , createdAt = pgUTCTime c_at
+      , updatedAt = pgUTCTime c_at
+      }
+    return ()
 
 update :: Connection -> PostId -> Post -> Response ()
 update = undefined

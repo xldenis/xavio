@@ -3,9 +3,14 @@
 
 module API where
 
-import Servant
 import Control.Monad.Trans.Either
+import Data.Text as T
+
 import Database.PostgreSQL.Simple as PGS
+import Opaleye
+
+import Servant
+
 
 type Responders = '[JSON]
 
@@ -29,3 +34,5 @@ serverFor :: Response [a] -- handler for listing of 'a's
 
 serverFor index show create update destroy = index :<|> create :<|> (\id -> show id :<|> update id :<|> destroy id)
 
+pgText :: Text -> Column PGText
+pgText = pgString . T.unpack

@@ -95,16 +95,20 @@ selectPostById id = proc () -> do
   returnA -< post
 
 create :: Connection -> Post -> Response Post
-create con post@(Post pid t b c_at u_at) = liftIO $ do
+create con post@(Post pid t b c_at u_at) = do
+  pid <- liftIO $ do
     c_at <- getCurrentTime
-    (runInsert con postsTable) $ Post
+    (runInsertReturning con postsTable (Post
       { postId = Nothing
       , title  = pgText t
       , body   = pgText b
       , createdAt = pgUTCTime c_at
       , updatedAt = pgUTCTime c_at
-      }
-    return post
+      })
+      (\p -> postId p)) :: IO [PostId]
+  case pid of
+    [] -> left err404
+    (x:_) -> return $ post {postId = x}
 
 update :: Connection -> PostId -> Post -> Response ()
 update = undefined

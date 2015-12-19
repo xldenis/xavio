@@ -94,7 +94,7 @@ selectPostById id = proc () -> do
   restrict -< pid .== pgInt4 id
   returnA -< post
 
-create :: Connection -> Post -> Response ()
+create :: Connection -> Post -> Response Post
 create con post@(Post pid t b c_at u_at) = liftIO $ do
     c_at <- getCurrentTime
     (runInsert con postsTable) $ Post
@@ -104,10 +104,12 @@ create con post@(Post pid t b c_at u_at) = liftIO $ do
       , createdAt = pgUTCTime c_at
       , updatedAt = pgUTCTime c_at
       }
-    return ()
+    return post
 
 update :: Connection -> PostId -> Post -> Response ()
 update = undefined
 
 destroy :: Connection -> PostId -> Response ()
-destroy = undefined
+destroy con pid = liftIO $ do
+  runDelete con postsTable (\p-> (postId p) .== pgInt4 pid)
+  return ()

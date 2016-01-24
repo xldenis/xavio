@@ -4,6 +4,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
 
 module PostsAPI where
 
@@ -57,6 +59,12 @@ postsTable = Table "posts"
                     }
                   )
 
+selectPostById :: PostId -> Opaleye.Query PostColumn
+selectPostById id = proc () -> do
+  post@(Post pid _ _ _ _) <- (queryTable postsTable) -< ()
+  restrict -< pid .== pgInt4 id
+  returnA -< post
+
 instance FromJSON Post where
   parseJSON (Object o)
     = Post <$>
@@ -75,26 +83,22 @@ instance ToJSON Post where
              , "created_at" .= c_at
              , "updated_at" .= u_at
              ]
+
 postsApi :: Connection -> Server PostsAPI
 postsApi c  = serverFor (index c) (show c) (create c) (update c) (destroy c)
 
-index :: Connection -> Response [Post]
-index con = liftIO $ runQuery con (queryTable postsTable)
 
-show :: Connection -> PostId -> Response Post
+index :: Connection -> Response Index [Post]
+index con = T <$> (liftIO $ runQuery con (queryTable postsTable) )
+
+show :: Connection -> PostId -> Response API.Show Post
 show con id = do
   post <- liftIO . (runQuery con) . selectPostById $ id
   case post of
     [] -> left err404
-    (p:_) -> return p
+    (p:_) -> return $ T p
 
-selectPostById :: PostId -> Opaleye.Query PostColumn
-selectPostById id = proc () -> do
-  post@(Post pid _ _ _ _) <- (queryTable postsTable) -< ()
-  restrict -< pid .== pgInt4 id
-  returnA -< post
-
-create :: Connection -> Post -> Response Post
+create :: Connection -> Post -> Response Create Post
 create con post@(Post pid t b c_at u_at) = do
   pid <- liftIO $ do
     c_at <- getCurrentTime
@@ -108,12 +112,20 @@ create con post@(Post pid t b c_at u_at) = do
       (\p -> postId p)) :: IO [PostId]
   case pid of
     [] -> left err404
-    (x:_) -> return $ post {postId = x}
+    (x:_) -> return $ T (post {postId = x})
 
-update :: Connection -> PostId -> Post -> Response ()
+update :: Connection -> PostId -> Post -> NoContent Update ()
 update = undefined
 
-destroy :: Connection -> PostId -> Response ()
+--update con post = do
+--  u_at <- liftIO $ do
+--    u_at <- getCurrentTime
+--    runUpdateReturning con postsTable (post {updatedAt = u_at}) (\p -> updatedAt p) :: IO [UTCTime]
+--  case u_at of
+--    [] -> left err404
+--    (p:_) -> return () -- $ post {updatedAt = u_at }
+
+destroy :: Connection -> PostId -> NoContent Destroy ()
 destroy con pid = liftIO $ do
   runDelete con postsTable (\p-> (postId p) .== pgInt4 pid)
-  return ()
+  return $ ()

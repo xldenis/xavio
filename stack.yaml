@@ -1,5 +1,6 @@
 flags: {}
 packages:
 - '.'
-extra-deps: []
-resolver: lts-3.14
+extra-deps: 
+  - servant-lucid-0.4.4.5
+resolver: lts-4.0

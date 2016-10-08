@@ -15,7 +15,7 @@ import GHC.Generics
 import Data.Text hiding (index)
 import Data.Time.Clock (UTCTime(..), getCurrentTime)
 
-import Control.Monad.Trans.Either
+import Control.Monad.Except
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad
 import Control.Arrow (returnA)
@@ -95,7 +95,7 @@ show :: Connection -> PostId -> Response API.Show Post
 show con id = do
   post <- liftIO . (runQuery con) . selectPostById $ id
   case post of
-    [] -> left err404
+    [] -> throwError err404
     (p:_) -> return $ T p
 
 create :: Connection -> Post -> Response Create Post
@@ -111,10 +111,10 @@ create con post@(Post pid t b c_at u_at) = do
       })
       (\p -> postId p)) :: IO [PostId]
   case pid of
-    [] -> left err404
+    [] -> throwError err404
     (x:_) -> return $ T (post {postId = x})
 
-update :: Connection -> PostId -> Post -> NoContent Update ()
+update :: Connection -> PostId -> Post -> HandlerM NoContent
 update = undefined
 
 --update con post = do
@@ -122,10 +122,10 @@ update = undefined
 --    u_at <- getCurrentTime
 --    runUpdateReturning con postsTable (post {updatedAt = u_at}) (\p -> updatedAt p) :: IO [UTCTime]
 --  case u_at of
---    [] -> left err404
+--    [] -> throwError err404
 --    (p:_) -> return () -- $ post {updatedAt = u_at }
 
-destroy :: Connection -> PostId -> NoContent Destroy ()
+destroy :: Connection -> PostId -> HandlerM NoContent
 destroy con pid = liftIO $ do
   runDelete con postsTable (\p-> (postId p) .== pgInt4 pid)
-  return $ ()
+  return $ NoContent

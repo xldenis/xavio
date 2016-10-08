@@ -5,7 +5,7 @@
 
 module API where
 import Prelude (IO, (.))
-import Control.Monad.Trans.Either
+import Control.Monad.Except
 import Data.Text as T
 
 import Database.PostgreSQL.Simple as PGS
@@ -18,9 +18,9 @@ import Servant
 type Responders = '[JSON]
 type Requesters = '[JSON]
 
-type Response t a = EitherT ServantErr IO (TaggedResp t a)
+type Response t a = HandlerM (TaggedResp t a)
 
-type NoContent (t :: Method) a = EitherT ServantErr IO a
+type HandlerM = ExceptT ServantErr IO
 
 data Method = Index | Show | New | Create | Edit | Update | Destroy
 
@@ -31,18 +31,18 @@ instance ToJSON a => ToJSON (TaggedResp t a) where
 
 type APIFor a i =
        Get Responders (TaggedResp Index [a]) -- list 'a's
-  :<|> ReqBody Requesters a :> Post Responders (TaggedResp Create a) -- add an 'a'
+  :<|> ReqBody Requesters a :> PostCreated Responders (TaggedResp Create a) -- add an 'a'
   :<|> Capture "id" i :>
-      (  Get Responders (TaggedResp Show a)
-    :<|> ReqBody Requesters a :> Put '[] ()
-    :<|> Delete '[] ()
-      )
+    (    Get Responders (TaggedResp Show a)
+    :<|> ReqBody Requesters a :> PutNoContent Responders NoContent
+    :<|> DeleteNoContent Responders NoContent
+    )
 
 serverFor :: Response Index [a] -- handler for listing of 'a's
           -> (i -> Response Show a) -- handler for viewing an 'a' given its identifier of type 'i'
           -> (a -> Response Create a) -- handler for adding an 'a'
-          -> (i -> a -> NoContent Update ()) -- updating an 'a' with given id
-           -> (i -> NoContent Destroy ()) -- deleting an 'a' given its id
+          -> (i -> a -> HandlerM NoContent) -- updating an 'a' with given id
+          -> (i -> HandlerM NoContent) -- deleting an 'a' given its id
           -> Server (APIFor a i)
 
 serverFor index show create update destroy = index :<|> create :<|> (\id -> show id :<|> update id :<|> destroy id)

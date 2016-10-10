@@ -3,7 +3,7 @@
 {-# LANGUAGE KindSignatures  #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module API where
+module Api where
 import Prelude (IO, (.))
 import Control.Monad.Except
 import Data.Text as T

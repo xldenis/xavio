@@ -1,6 +1,13 @@
 flags: {}
 packages:
-- '.'
+- location: '.'
+- location:
+    git: https://github.com/byteally/dbrecord.git
+    commit: d2cb4babf421eb38c219505e984106bc83fc7cc7
+  extra-dep: true
+- location:
+    git: git@github.com:byteally/dbrecord-opaleye.git
+    commit: 605c10e4627cb52ff2383be630f9926d71b771d8
+  extra-dep: true
 extra-deps:
-  # - servant-lucid-0.4.4.5
 resolver: lts-7.2

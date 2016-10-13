@@ -1,13 +1,9 @@
 flags: {}
 packages:
 - location: '.'
-- location:
-    git: https://github.com/byteally/dbrecord.git
-    commit: d2cb4babf421eb38c219505e984106bc83fc7cc7
+- location: '../../byteally/dbrecord'
   extra-dep: true
-- location:
-    git: git@github.com:byteally/dbrecord-opaleye.git
-    commit: 605c10e4627cb52ff2383be630f9926d71b771d8
+- location: '../../byteally/dbrecord-opaleye'
   extra-dep: true
 extra-deps:
 resolver: lts-7.2

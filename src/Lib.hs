@@ -9,22 +9,23 @@ import Network.Wai
 import Network.Wai.Handler.Warp
 import Servant
 
-import Database.PostgreSQL.Simple as PGS
-
+import qualified Database.Transaction as DB
 import PostsAPI
+
+import Api.Post
 
 import Config
 
 type API = "posts" :> PostsAPI
 
 startApp :: Config -> IO ()
-startApp conf = run (port conf) (app $ conn conf)
+startApp conf = run (port conf) (app $ database conf)
 
-app :: PGS.Connection -> Application
+app :: DB.Config a -> Application
 app c = serve api $ server c
 
 api :: Proxy API
 api = Proxy
 
-server :: PGS.Connection -> Server API
+server :: DB.Config a -> Server API
 server c = postsApi c

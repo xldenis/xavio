@@ -1,12 +1,13 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, DeriveGeneric, TypeFamilies, FlexibleInstances, MultiParamTypeClasses, DuplicateRecordFields, Arrows, TypeApplications, UndecidableInstances, FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, DeriveGeneric, TypeFamilies, FlexibleInstances, MultiParamTypeClasses, OverloadedLabels, Arrows, TypeApplications, UndecidableInstances, FlexibleContexts #-}
 module Api.Post where
 import Prelude hiding (id)
 
 import Data.Aeson
 import Data.Profunctor
-import Data.Profunctor.Product.Default
+import Data.Profunctor.Product.Default hiding (def)
+import qualified Data.Profunctor.Product.Default as P (def)
 
-import Database.Migration hiding (Column, def, Col)
+import Database.Migration hiding (Column, Col)
 import Database.Transaction
 
 import Opaleye hiding (Table(..))
@@ -30,8 +31,8 @@ data Post f = Post
   { id :: Col f "id" PostId
   , title :: Col f "title" Text
   , body  :: Col f "body" Text
-  , createdAt :: Col f "created_at" UTCTime
-  , updatedAt :: Col f "updated_at" UTCTime
+  , created_at :: Col f "created_at" UTCTime
+  , updated_at :: Col f "updated_at" UTCTime
   } deriving (Generic)
 
 instance ( Profunctor p
@@ -42,11 +43,11 @@ instance ( Profunctor p
          , Default p (Col f "created_at" UTCTime) (Col g "created_at" UTCTime)
          , Default p (Col f "updated_at" UTCTime) (Col g "updated_at" UTCTime)
          ) => Default p (Post f) (Post g) where
-  def = Post <$> lmap id def
-             <*> lmap title def
-             <*> lmap body def
-             <*> lmap createdAt def
-             <*> lmap updatedAt def
+  def = Post <$> lmap id P.def
+             <*> lmap title P.def
+             <*> lmap body P.def
+             <*> lmap created_at P.def
+             <*> lmap updated_at P.def
 
 instance FromJSON (Post Hask) where
   parseJSON (Object o)
@@ -74,6 +75,17 @@ instance Database TestDb where
 
 instance Table TestDb (Post Hask) where
   type HasDefault (Post Hask) = '["id"]
+  type TableName (Post Hask)  = "posts"
+  type PrimaryKey (Post Hask) = '["id"]
+
+  type Check (Post Hask) = '[ 'CheckOn '["title"] "notnull"
+                            , 'CheckOn '["body"] "notnull"
+                            , 'CheckOn '["created_at"] "notnull"
+                            , 'CheckOn '["updated_at"] "notnull"
+                            ]
+
+  defaults = dbDefaults (def @"id" @(Post Hask) (PostId 1) :& end)
+  checks = dbChecks (check @"notnull" (\f -> f == f) :& end)
 
 findById :: PostId -> Query (Post Op)
 findById postId = proc () -> do
@@ -81,5 +93,6 @@ findById postId = proc () -> do
   restrict -< (id post) .== constant postId
   returnA -< post
 
-test :: PG [Post Hask]
-test = getAll (findById (PostId 1))
+postsTable :: Tab TestDb Post
+postsTable = Tab
+

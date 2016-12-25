@@ -16,6 +16,6 @@ main = do
   conf <- Config 8080 <$> config
   startApp conf
 
-config :: IO (DB.Config ())
-config = DB.defaultConfig $ PGS.defaultConnectInfo
+config :: IO (PGS.Connection)
+config = connect $ PGS.defaultConnectInfo
   { PGS.connectDatabase = "xavio_development" }

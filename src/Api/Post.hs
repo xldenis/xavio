@@ -7,12 +7,7 @@ import Data.Profunctor
 import Data.Profunctor.Product.Default hiding (def)
 import qualified Data.Profunctor.Product.Default as P (def)
 
-import Database.Migration hiding (Column, Col)
-import Database.Transaction
-
-import Opaleye hiding (Table(..))
-
-import Opaleye.Record
+import Opaleye
 
 import Data.Text as T
 import Data.Time.Clock
@@ -24,24 +19,35 @@ import Control.Monad.Reader
 
 import Web.HttpApiData
 
+import Database
+
+import           Database.PostgreSQL.Simple.FromField
+
 newtype PostId = PostId Int
-  deriving (Generic, FromJSON, ToJSON, FromHttpApiData)
+  deriving (Generic, FromJSON, ToJSON, FromHttpApiData, FromField)
+
+instance Default Constant PostId (Column PGInt4) where
+  def = Constant (pgInt4 . unPost)
+    where unPost (PostId i) = i
+
+instance QueryRunnerColumnDefault PGInt4 PostId where
+  queryRunnerColumnDefault = fieldQueryRunnerColumn
 
 data Post f = Post
-  { id :: Col f "id" PostId
-  , title :: Col f "title" Text
-  , body  :: Col f "body" Text
-  , created_at :: Col f "created_at" UTCTime
-  , updated_at :: Col f "updated_at" UTCTime
+  { id :: TableField f PostId PGInt4 NN Opt
+  , title :: TableField f Text PGText NN Req
+  , body  :: TableField f Text PGText NN Req
+  , created_at :: TableField f UTCTime PGTimestamptz NN Req
+  , updated_at :: TableField f UTCTime PGTimestamptz NN Req
   } deriving (Generic)
 
 instance ( Profunctor p
          , Applicative (p (Post f))
-         , Default p (Col f "id" PostId) (Col g "id" PostId)
-         , Default p (Col f "title" Text) (Col g "title" Text)
-         , Default p (Col f "body" Text) (Col g "body" Text)
-         , Default p (Col f "created_at" UTCTime) (Col g "created_at" UTCTime)
-         , Default p (Col f "updated_at" UTCTime) (Col g "updated_at" UTCTime)
+         , Default p (TableField f PostId PGInt4 NN Opt) (TableField g PostId PGInt4 NN Opt)
+         , Default p (TableField f Text PGText NN Req) (TableField g Text PGText NN Req)
+         , Default p (TableField f Text PGText NN Req) (TableField g Text PGText NN Req)
+         , Default p (TableField f UTCTime PGTimestamptz NN Req) (TableField g UTCTime PGTimestamptz NN Req)
+         , Default p (TableField f UTCTime PGTimestamptz NN Req) (TableField g UTCTime PGTimestamptz NN Req)
          ) => Default p (Post f) (Post g) where
   def = Post <$> lmap id P.def
              <*> lmap title P.def
@@ -68,31 +74,17 @@ instance ToJSON (Post Hask) where
              , "updated_at" .= u_at
              ]
 
-data TestDb
-
-instance Database TestDb where
-  type Tables TestDb = '[Post Hask]
-
-instance Table TestDb (Post Hask) where
-  type HasDefault (Post Hask) = '["id"]
-  type TableName (Post Hask)  = "posts"
-  type PrimaryKey (Post Hask) = '["id"]
-
-  type Check (Post Hask) = '[ 'CheckOn '["title"] "notnull"
-                            , 'CheckOn '["body"] "notnull"
-                            , 'CheckOn '["created_at"] "notnull"
-                            , 'CheckOn '["updated_at"] "notnull"
-                            ]
-
-  defaults = dbDefaults (def @"id" @(Post Hask) (PostId 1) :& end)
-  checks = dbChecks (check @"notnull" (\f -> f == f) :& end)
-
 findById :: PostId -> Query (Post Op)
 findById postId = proc () -> do
-  post <- query (Tab @TestDb @Post) -< ()
+  post <- queryTable (postsTable) -< ()
   restrict -< (id post) .== constant postId
   returnA -< post
 
-postsTable :: Tab TestDb Post
-postsTable = Tab
+postsTable :: Table (Post W) (Post Op)
+postsTable = Table "posts_table" (Post <$> lmap id (optional "id")
+                                       <*> lmap title (required "title")
+                                       <*> lmap body (required "body")
+                                       <*> lmap created_at (required "created_at")
+                                       <*> lmap updated_at (required "updated_at")
+                                 )
 

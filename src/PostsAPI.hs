@@ -6,6 +6,9 @@ module PostsAPI where
 
 import Prelude hiding (show, index)
 
+import Database.PostgreSQL.Simple as PGS
+import Database
+
 import Data.Aeson
 import Data.Text hiding (index)
 import Data.Time.Clock (UTCTime(..), getCurrentTime)
@@ -20,14 +23,11 @@ import Control.Arrow (returnA)
 import Servant hiding (Post)
 
 import Opaleye
-import qualified Opaleye.Record as R
-
-import qualified Database.Transaction as DB
 
 import Api
 import Api.Post as Post
 
-type PostsAPI = APIFor CreatePost (Post R.Hask) PostId
+type PostsAPI = APIFor CreatePost (Post Hask) PostId
 
 data CreatePost = CreatePost
   { cTitle :: Text
@@ -41,41 +41,41 @@ instance FromJSON CreatePost where
       o .: "body"
   parseJSON _ = mzero
 
-postsApi :: DB.Config a -> Server PostsAPI
+postsApi :: PGS.Connection -> Server PostsAPI
 postsApi c  = serverFor (index c) (show c) (create c) (update c) (destroy c)
 
-runHandler :: DB.Config a -> DB.PG b -> IO b
-runHandler = flip $ runReaderT . DB.runTransaction
+-- runHandler :: PGS.Connection -> DB.PG b -> IO b
+-- runHandler = flip $ runReaderT . DB.runTransaction
 
 -- TODO: Write natural transformation to pull out all db effects
 
-index :: DB.Config a -> Response Index [Post R.Hask]
-index con = liftIO $ fmap T $ (runHandler con) . R.getAll $ R.query (R.Tab @TestDb @Post)
+index :: PGS.Connection -> Response Index [Post Hask]
+index con = liftIO $ fmap T $ runQuery con (queryTable postsTable)
 
-show :: DB.Config a -> PostId -> Response Api.Show (Post R.Hask)
+show :: PGS.Connection -> PostId -> Response Api.Show (Post Hask)
 show con id = do
-  post <- liftIO . runHandler con . R.getAll $ findById id
+  post <- liftIO . runQuery con $ findById id
   case post of
     [] -> throwError err404
     (p:_) -> return $ T p
 
-create :: DB.Config a -> CreatePost -> Response Create (Post R.Hask)
+create :: PGS.Connection -> CreatePost -> Response Create (Post Hask)
 create con post = do
   posts <- liftIO $ do
     c_at <- getCurrentTime
-    liftIO . runHandler con $ R.insertRet postsTable (Post
+    liftIO $ runInsertReturning con postsTable (Post
       { Post.id = Nothing
-      , title = cTitle post
-      , body = cBody post
-      , created_at = c_at
-      , updated_at = c_at
+      , title = pgText $ cTitle post
+      , body = pgText $ cBody post
+      , created_at = pgUTCTime c_at
+      , updated_at = pgUTCTime c_at
       }) Prelude.id
 
   case posts of
     [] -> throwError err404
     (x:_) -> return $ T x
 
-update :: DB.Config a -> PostId -> Post R.Hask -> HandlerM NoContent
+update :: PGS.Connection -> PostId -> Post Hask -> HandlerM NoContent
 update = undefined
 
 --update con post = do
@@ -86,8 +86,8 @@ update = undefined
 --    [] -> throwError err404
 --    (p:_) -> return () -- $ post {updated_at = u_at }
 
-destroy :: DB.Config a -> PostId -> HandlerM NoContent
+destroy :: PGS.Connection -> PostId -> HandlerM NoContent
 destroy con pid = do
-  liftIO . runHandler con $ R.delete postsTable (\p-> (Post.id p) .== constant pid)
+  liftIO $ runDelete con postsTable (\p-> (Post.id p) .== constant pid)
   return $ NoContent
 

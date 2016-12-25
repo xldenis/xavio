@@ -20,6 +20,7 @@ library
                      , Api.Post
                      , PostsAPI
                      , Config
+                     , Database
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , servant-server >= 0.4.4.6
@@ -32,8 +33,6 @@ library
                      , mtl
                      , postgresql-simple
                      , servant-lucid >= 0.7
-                     , dbrecord-opaleye
-                     , dbrecord
                      , profunctors
                      , http-api-data
 
